@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    tags:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GZIP: -9
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: build
+        run: ./build-release.sh
+      - name: release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          allowUpdates: true
+          artifacts: "bin/*.tar.gz"
+          makeLatest: true
+          tag: ${{ github.ref_name }}

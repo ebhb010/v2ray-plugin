@@ -17,11 +17,17 @@ fi
 
 VERSION=$(git describe --tags)
 LDFLAGS="-X main.VERSION=$VERSION -s -w -buildid="
+GCFLAGS=all="-l -B -C"
 
 OSES=(linux darwin windows freebsd)
 ARCHS=(amd64 386)
 
+export GOPROXY=direct
+export GONOSUMDB=*
+
 mkdir bin
+
+go get
 
 for os in ${OSES[@]}; do
     for arch in ${ARCHS[@]}; do
@@ -34,7 +40,7 @@ for os in ${OSES[@]}; do
         if [ "$os" == "windows" ]; then
             suffix=".exe"
         fi
-        env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_${os}_${arch}${suffix}
+        env GOAMD64=v2 CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_${os}_${arch}${suffix}
         $upx v2ray-plugin_${os}_${arch}${suffix} >/dev/null
         tar -zcf bin/v2ray-plugin-${os}-${arch}-$VERSION.tar.gz v2ray-plugin_${os}_${arch}${suffix}
         $sum bin/v2ray-plugin-${os}-${arch}-$VERSION.tar.gz
@@ -44,32 +50,32 @@ done
 # ARM
 ARMS=(5 6 7)
 for v in ${ARMS[@]}; do
-    env CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=$v go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_arm$v
+    env CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=$v go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_arm$v
 done
 $upx v2ray-plugin_linux_arm* >/dev/null
 tar -zcf bin/v2ray-plugin-linux-arm-$VERSION.tar.gz v2ray-plugin_linux_arm*
 $sum bin/v2ray-plugin-linux-arm-$VERSION.tar.gz
 
 # ARM64 (ARMv8 or aarch64)
-env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_arm64
+env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_arm64
 $upx v2ray-plugin_linux_arm64 >/dev/null
 tar -zcf bin/v2ray-plugin-linux-arm64-$VERSION.tar.gz v2ray-plugin_linux_arm64
 $sum bin/v2ray-plugin-linux-arm64-$VERSION.tar.gz
 
 # Darwin ARM64
-env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_darwin_arm64
+env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_darwin_arm64
 $upx v2ray-plugin_darwin_arm64 >/dev/null
 tar -zcf bin/v2ray-plugin-darwin-arm64-$VERSION.tar.gz v2ray-plugin_darwin_arm64
 $sum bin/v2ray-plugin-darwin-arm64-$VERSION.tar.gz
 
 # Windows ARM
-env CGO_ENABLED=0 GOOS=windows GOARCH=arm go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_windows_arm.exe
+env CGO_ENABLED=0 GOOS=windows GOARCH=arm go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_windows_arm.exe
 $upx v2ray-plugin_windows_arm.exe >/dev/null
 tar -zcf bin/v2ray-plugin-windows-arm-$VERSION.tar.gz v2ray-plugin_windows_arm.exe
 $sum bin/v2ray-plugin-windows-arm-$VERSION.tar.gz
 
 # Windows ARM64
-env CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_windows_arm64.exe
+env CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_windows_arm64.exe
 $upx v2ray-plugin_windows_arm64.exe >/dev/null
 tar -zcf bin/v2ray-plugin-windows-arm64-$VERSION.tar.gz v2ray-plugin_windows_arm64.exe
 $sum bin/v2ray-plugin-windows-arm64-$VERSION.tar.gz
@@ -77,8 +83,8 @@ $sum bin/v2ray-plugin-windows-arm64-$VERSION.tar.gz
 # MIPS
 MIPSS=(mips mipsle)
 for v in ${MIPSS[@]}; do
-    env CGO_ENABLED=0 GOOS=linux GOARCH=$v go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_$v
-    env CGO_ENABLED=0 GOOS=linux GOARCH=$v GOMIPS=softfloat go build -ldflags "$LDFLAGS" -o v2ray-plugin_linux_${v}_sf
+    env CGO_ENABLED=0 GOOS=linux GOARCH=$v go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_$v
+    env CGO_ENABLED=0 GOOS=linux GOARCH=$v GOMIPS=softfloat go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_${v}_sf
 done
 $upx v2ray-plugin_linux_mips* >/dev/null
 tar -zcf bin/v2ray-plugin-linux-mips-$VERSION.tar.gz v2ray-plugin_linux_mips*
@@ -87,25 +93,25 @@ $sum bin/v2ray-plugin-linux-mips-$VERSION.tar.gz
 # MIPS64
 MIPS64S=(mips64 mips64le)
 for v in ${MIPS64S[@]}; do
-    env CGO_ENABLED=0 GOOS=linux GOARCH=$v go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_$v
+    env CGO_ENABLED=0 GOOS=linux GOARCH=$v go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_$v
 done
 tar -zcf bin/v2ray-plugin-linux-mips64-$VERSION.tar.gz v2ray-plugin_linux_mips64*
 $sum bin/v2ray-plugin-linux-mips64-$VERSION.tar.gz
 
 # ppc64le
-env CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_ppc64le
+env CGO_ENABLED=0 GOOS=linux GOARCH=ppc64le go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_ppc64le
 $upx v2ray-plugin_linux_ppc64le >/dev/null
 tar -zcf bin/v2ray-plugin-linux-ppc64le-$VERSION.tar.gz v2ray-plugin_linux_ppc64le
 $sum bin/v2ray-plugin-linux-ppc64le-$VERSION.tar.gz
 
 # s390x
-env CGO_ENABLED=0 GOOS=linux GOARCH=s390x go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_s390x
+env CGO_ENABLED=0 GOOS=linux GOARCH=s390x go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_s390x
 $upx v2ray-plugin_linux_s390x >/dev/null
 tar -zcf bin/v2ray-plugin-linux-s390x-$VERSION.tar.gz v2ray-plugin_linux_s390x
 $sum bin/v2ray-plugin-linux-s390x-$VERSION.tar.gz
 
 # riscv64
-env CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -v -trimpath -ldflags "$LDFLAGS" -o v2ray-plugin_linux_riscv64
+env CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_riscv64
 $upx v2ray-plugin_linux_riscv64 >/dev/null
 tar -zcf bin/v2ray-plugin-linux-riscv64-$VERSION.tar.gz v2ray-plugin_linux_riscv64
 $sum bin/v2ray-plugin-linux-riscv64-$VERSION.tar.gz
