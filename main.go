@@ -33,6 +33,7 @@ import (
 	"github.com/v2fly/v2ray-core/v5/transport/internet/grpc"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/quic"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/tls"
+	"github.com/v2fly/v2ray-core/v5/transport/internet/tls/utls"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/websocket"
 )
 
@@ -131,23 +132,23 @@ func generateConfig() (*core.Config, error) {
 	switch *mode {
 	case "websocket":
 		if *server {
-		transportSettings = &websocket.Config{
-			Path: *path,
-			Header: []*websocket.Header{
-				{Key: "Host", Value: *host},
-				{Key: "content-type", Value: "application/vnd.ms-cab-compressed"},
-				{Key: "server", Value: "ECAcc (lac/55D2)"},
-				{Key: "etag", Value: "80b93e24a2b0d71:0"},
-			},
-		}
+			transportSettings = &websocket.Config{
+				Path: *path,
+				Header: []*websocket.Header{
+					{Key: "Host", Value: *host},
+					{Key: "content-type", Value: "application/vnd.ms-cab-compressed"},
+					{Key: "server", Value: "ECAcc (lac/55D2)"},
+					{Key: "etag", Value: "80b93e24a2b0d71:0"},
+				},
+			}
 		} else {
-		transportSettings = &websocket.Config{
-			Path: *path,
-			Header: []*websocket.Header{
-				{Key: "Host", Value: *host},
-				{Key: "User-Agent", Value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.3"},
-			},
-		}
+			transportSettings = &websocket.Config{
+				Path: *path,
+				Header: []*websocket.Header{
+					{Key: "Host", Value: *host},
+					{Key: "User-Agent", Value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.3"},
+				},
+			}
 		}
 		if *mux != 0 {
 			connectionReuse = true
@@ -190,6 +191,7 @@ func generateConfig() (*core.Config, error) {
 	}
 	if *tlsEnabled {
 		tlsConfig := tls.Config{ServerName: *host}
+		utlsConfig := utls.Config{Imitate: "randomized"}
 		if *server {
 			certificate := tls.Certificate{}
 			if *cert == "" && *certRaw == "" {
@@ -217,8 +219,9 @@ func generateConfig() (*core.Config, error) {
 			}
 			tlsConfig.Certificate = []*tls.Certificate{&certificate}
 		}
-		streamConfig.SecurityType = serial.GetMessageType(&tlsConfig)
-		streamConfig.SecuritySettings = []*anypb.Any{serial.ToTypedMessage(&tlsConfig)}
+		utlsConfig.TlsConfig = &tlsConfig
+		streamConfig.SecurityType = serial.GetMessageType(&utlsConfig)
+		streamConfig.SecuritySettings = []*anypb.Any{serial.ToTypedMessage(&utlsConfig)}
 	}
 
 	apps := []*anypb.Any{
