@@ -33,6 +33,7 @@ import (
 	"github.com/v2fly/v2ray-core/v5/transport/internet/grpc"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/quic"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/tls"
+	"github.com/v2fly/v2ray-core/v5/transport/internet/tls/utls"
 	"github.com/v2fly/v2ray-core/v5/transport/internet/websocket"
 )
 
@@ -41,25 +42,27 @@ var (
 )
 
 var (
-	vpn         = flag.Bool("V", false, "Run in VPN mode.")
-	fastOpen    = flag.Bool("fast-open", false, "Enable TCP fast open.")
-	localAddr   = flag.String("localAddr", "127.0.0.1", "local address to listen on.")
-	localPort   = flag.String("localPort", "1984", "local port to listen on.")
-	remoteAddr  = flag.String("remoteAddr", "127.0.0.1", "remote address to forward.")
-	remotePort  = flag.String("remotePort", "1080", "remote port to forward.")
-	path        = flag.String("path", "/", "URL path for websocket.")
-	serviceName = flag.String("serviceName", "GunService", "Service name for grpc.")
-	host        = flag.String("host", "cloudfront.com", "Hostname for server.")
-	tlsEnabled  = flag.Bool("tls", false, "Enable TLS.")
-	cert        = flag.String("cert", "", "Path to TLS certificate file. Overrides certRaw. Default: ~/.acme.sh/{host}/fullchain.cer")
-	certRaw     = flag.String("certRaw", "", "Raw TLS certificate content. Intended only for Android.")
-	key         = flag.String("key", "", "(server) Path to TLS key file. Default: ~/.acme.sh/{host}/{host}.key")
-	mode        = flag.String("mode", "websocket", "Transport mode: websocket, quic (enforced tls), grpc.")
-	mux         = flag.Int("mux", 1, "Concurrent multiplexed connections (websocket client mode only).")
-	server      = flag.Bool("server", false, "Run in server mode")
-	logLevel    = flag.String("loglevel", "", "loglevel for v2ray: debug, info, warning (default), error, none.")
-	version     = flag.Bool("version", false, "Show current version of v2ray-plugin")
-	fwmark      = flag.Int("fwmark", 0, "Set SO_MARK option for outbound sockets.")
+	vpn          = flag.Bool("V", false, "Run in VPN mode.")
+	fastOpen     = flag.Bool("fast-open", false, "Enable TCP fast open.")
+	localAddr    = flag.String("localAddr", "127.0.0.1", "local address to listen on.")
+	localPort    = flag.String("localPort", "1984", "local port to listen on.")
+	remoteAddr   = flag.String("remoteAddr", "127.0.0.1", "remote address to forward.")
+	remotePort   = flag.String("remotePort", "1080", "remote port to forward.")
+	path         = flag.String("path", "/", "URL path for websocket.")
+	serviceName  = flag.String("serviceName", "GunService", "Service name for grpc.")
+	host         = flag.String("host", "cloudfront.com", "Hostname for server.")
+	tlsEnabled   = flag.Bool("tls", false, "Enable TLS.")
+	cert         = flag.String("cert", "", "Path to TLS certificate file. Overrides certRaw. Default: ~/.acme.sh/{host}/fullchain.cer")
+	certRaw      = flag.String("certRaw", "", "Raw TLS certificate content. Intended only for Android.")
+	key          = flag.String("key", "", "(server) Path to TLS key file. Default: ~/.acme.sh/{host}/{host}.key")
+	mode         = flag.String("mode", "websocket", "Transport mode: websocket, quic (enforced tls), grpc.")
+	mux          = flag.Int("mux", 1, "Concurrent multiplexed connections (websocket client mode only).")
+	server       = flag.Bool("server", false, "Run in server mode")
+	logLevel     = flag.String("loglevel", "", "loglevel for v2ray: debug, info, warning (default), error, none.")
+	version      = flag.Bool("version", false, "Show current version of v2ray-plugin")
+	fwmark       = flag.Int("fwmark", 0, "Set SO_MARK option for outbound sockets.")
+	insecure     = flag.Bool("insecure", false, "Allow insecure certificate from server, commonly self signed.")
+	pinnedsha256 = flag.String("pinnedSha256", "", "Pinned Certificate chain sha256 fingerprint. Seprate with #.")
 )
 
 func homeDir() string {
@@ -131,23 +134,23 @@ func generateConfig() (*core.Config, error) {
 	switch *mode {
 	case "websocket":
 		if *server {
-		transportSettings = &websocket.Config{
-			Path: *path,
-			Header: []*websocket.Header{
-				{Key: "Host", Value: *host},
-				{Key: "content-type", Value: "application/vnd.ms-cab-compressed"},
-				{Key: "server", Value: "ECAcc (lac/55D2)"},
-				{Key: "etag", Value: "80b93e24a2b0d71:0"},
-			},
-		}
+			transportSettings = &websocket.Config{
+				Path: *path,
+				Header: []*websocket.Header{
+					{Key: "Host", Value: *host},
+					{Key: "content-type", Value: "application/vnd.ms-cab-compressed"},
+					{Key: "server", Value: "ECAcc (lac/55D2)"},
+					{Key: "etag", Value: "80b93e24a2b0d71:0"},
+				},
+			}
 		} else {
-		transportSettings = &websocket.Config{
-			Path: *path,
-			Header: []*websocket.Header{
-				{Key: "Host", Value: *host},
-				{Key: "User-Agent", Value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.3"},
-			},
-		}
+			transportSettings = &websocket.Config{
+				Path: *path,
+				Header: []*websocket.Header{
+					{Key: "Host", Value: *host},
+					{Key: "User-Agent", Value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.3"},
+				},
+			}
 		}
 		if *mux != 0 {
 			connectionReuse = true
@@ -209,16 +212,38 @@ func generateConfig() (*core.Config, error) {
 				return nil, newError("failed to read key file").Base(err)
 			}
 			tlsConfig.Certificate = []*tls.Certificate{&certificate}
-		} else if *cert != "" || *certRaw != "" {
-			certificate := tls.Certificate{Usage: tls.Certificate_AUTHORITY_VERIFY}
-			certificate.Certificate, err = readCertificate()
-			if err != nil {
-				return nil, newError("failed to read cert").Base(err)
+			streamConfig.SecurityType = serial.GetMessageType(&tlsConfig)
+			streamConfig.SecuritySettings = []*anypb.Any{serial.ToTypedMessage(&tlsConfig)}
+		} else {
+			if *cert != "" || *certRaw != "" {
+				certificate := tls.Certificate{Usage: tls.Certificate_AUTHORITY_VERIFY}
+				certificate.Certificate, err = readCertificate()
+				if err != nil {
+					return nil, newError("failed to read cert").Base(err)
+				}
+				tlsConfig.Certificate = []*tls.Certificate{&certificate}
 			}
-			tlsConfig.Certificate = []*tls.Certificate{&certificate}
+			if *insecure {
+				tlsConfig.AllowInsecure = true
+				tlsConfig.AllowInsecureIfPinnedPeerCertificate = true
+			}
+			if *pinnedsha256 != "" {
+				fp := strings.Split(*pinnedsha256, "#")
+				var fps = make([][]byte, 3)
+				for i := range fp {
+					if i >= 3 {
+						fps = append(fps, []byte(fp[i]))
+					} else {
+						fps[i] = []byte(fp[i])
+					}
+				}
+				tlsConfig.PinnedPeerCertificateChainSha256 = fps
+			}
+			utlsConfig := utls.Config{Imitate: "randomized"}
+			utlsConfig.TlsConfig = &tlsConfig
+			streamConfig.SecurityType = serial.GetMessageType(&utlsConfig)
+			streamConfig.SecuritySettings = []*anypb.Any{serial.ToTypedMessage(&utlsConfig)}
 		}
-		streamConfig.SecurityType = serial.GetMessageType(&tlsConfig)
-		streamConfig.SecuritySettings = []*anypb.Any{serial.ToTypedMessage(&tlsConfig)}
 	}
 
 	apps := []*anypb.Any{
@@ -369,6 +394,13 @@ func startV2Ray() (core.Server, error) {
 			} else {
 				logWarn("failed to parse fwmark, use default value")
 			}
+		}
+
+		if _, b := opts.Get("insecure"); b {
+			*insecure = true
+		}
+		if c, b := opts.Get("pinnedsha256"); b {
+			*pinnedsha256 = c
 		}
 
 		if *vpn {
