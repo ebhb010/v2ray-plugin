@@ -17,7 +17,7 @@ fi
 
 VERSION=$(git describe --tags)
 LDFLAGS="-X main.VERSION=$VERSION -s -w -buildid="
-GCFLAGS=all="-l -B -C"
+GCFLAGS=all="-B -C"
 
 OSES=(linux darwin windows freebsd)
 ARCHS=(amd64 386)
