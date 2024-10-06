@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
@@ -63,6 +64,7 @@ var (
 	fwmark       = flag.Int("fwmark", 0, "Set SO_MARK option for outbound sockets.")
 	insecure     = flag.Bool("insecure", false, "Allow insecure certificate from server, commonly self signed.")
 	pinnedsha256 = flag.String("pinnedSha256", "", "Pinned Certificate chain sha256 fingerprint. Seprate with #.")
+	useragent    = flag.String("userAgent", "", "User agent(base64) to include in http request.")
 )
 
 func homeDir() string {
@@ -144,11 +146,21 @@ func generateConfig() (*core.Config, error) {
 				},
 			}
 		} else {
+			var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0"
+			if *useragent != "" {
+				u, err := base64.StdEncoding.DecodeString(*useragent)
+				if err != nil {
+					logWarn("Can not decode provided useragent !")
+				} else {
+					ua = string(u)
+				}
+			}
+
 			transportSettings = &websocket.Config{
 				Path: *path,
 				Header: []*websocket.Header{
 					{Key: "Host", Value: *host},
-					{Key: "User-Agent", Value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.3"},
+					{Key: "User-Agent", Value: ua},
 				},
 			}
 		}
@@ -401,6 +413,12 @@ func startV2Ray() (core.Server, error) {
 		}
 		if c, b := opts.Get("pinnedsha256"); b {
 			*pinnedsha256 = c
+		}
+
+		if c, b := opts.Get("useragent"); b {
+			if !*server {
+				*useragent = c
+			}
 		}
 
 		if *vpn {
