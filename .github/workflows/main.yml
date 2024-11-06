@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/eebssk1/bbk/debian-bookworm:latest
     env:
       GZIP: -9
 
