@@ -192,15 +192,30 @@ func generateConfig() (*core.Config, error) {
 			Settings:     serial.ToTypedMessage(transportSettings),
 		}},
 	}
+
+	var socketConfig *internet.SocketConfig
 	if *fastOpen || *fwmark != 0 {
-		socketConfig := &internet.SocketConfig{}
+		socketConfig = &internet.SocketConfig{}
 		if *fastOpen {
 			socketConfig.Tfo = internet.SocketConfig_Enable
 		}
 		if *fwmark != 0 {
 			socketConfig.Mark = uint32(*fwmark)
 		}
-
+	}
+	if runtime.GOOS == "windows" {
+		const bufsize = 73728
+		if socketConfig != nil {
+			socketConfig.TxBufSize = bufsize
+			socketConfig.RxBufSize = bufsize
+		} else {
+			socketConfig = &internet.SocketConfig{
+				TxBufSize: bufsize,
+				RxBufSize: bufsize,
+			}
+		}
+	}
+	if socketConfig != nil {
 		streamConfig.SocketSettings = socketConfig
 	}
 	if *tlsEnabled {

@@ -33,8 +33,8 @@ rm go1.22.8.linux-amd64.tar.gz
 
 export PATH=$PWD/go/bin:$PATH
 
-wget https://github.com/eebssk1/aio_tc_build/releases/download/e42fe14d/x86_64-linux-gnu-native.tb2
-wget https://github.com/eebssk1/aio_tc_build/releases/download/e42fe14d/x86_64-w64_legacy-mingw32-cross.tb2
+wget https://github.com/eebssk1/aio_tc_build/releases/latest/download/x86_64-linux-gnu-native.tb2
+wget https://github.com/eebssk1/aio_tc_build/releases/latest/download/x86_64-w64_legacy-mingw32-cross.tb2
 
 tar --bz -xf x86_64-linux-gnu-native.tb2
 tar --bz -xf x86_64-w64_legacy-mingw32-cross.tb2
@@ -68,12 +68,14 @@ for os in ${OSES[@]}; do
     done
 done
 
-env GOAMD64=v2 CGO_ENABLED=1 CC="x86_64-w64-mingw32-gcc -O3" CGO_LDFLAGS="-Wl,-O3,--relax -static-libgcc -static-libstdc++ -Wl,--push-state,-Bstatic,-lstdc++,-lwinpthread,--pop-state" GOOS=windows GOARCH=amd64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_windows_amd64-c.exe
+env GOAMD64=v2 CGO_ENABLED=1 CC="x86_64-w64-mingw32-gcc -O3 -g0" CGO_LDFLAGS="-Wl,-O3,--relax -static-libgcc -static-libstdc++ -Wl,--push-state,-Bstatic,-lstdc++,-lwinpthread,--pop-state" GOOS=windows GOARCH=amd64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_windows_amd64-c.exe
+x86_64-w64-mingw32-strip v2ray-plugin_windows_amd64-c.exe
 $upx v2ray-plugin_windows_amd64-c.exe >/dev/null
 tar -zcf bin/v2ray-plugin-windows-amd64-$VERSION-c.tar.gz v2ray-plugin_windows_amd64-c.exe
 $sum bin/v2ray-plugin-windows-amd64-$VERSION-c.tar.gz
 
-env GOAMD64=v2 CGO_ENABLED=1 CC="gcc -O3" CGO_LDFLAGS="-Wl,-O3,--relax -static-libgcc -static-libstdc++" GOOS=linux GOARCH=amd64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_amd64-c
+env GOAMD64=v2 CGO_ENABLED=1 CC="gcc -O3 -g0" CGO_LDFLAGS="-Wl,-O3,--relax -static-libgcc -static-libstdc++" GOOS=linux GOARCH=amd64 go build -v -trimpath -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o v2ray-plugin_linux_amd64-c
+strip v2ray-plugin_linux_amd64-c
 $upx v2ray-plugin_linux_amd64-c >/dev/null
 tar -zcf bin/v2ray-plugin-linux-amd64-$VERSION-c.tar.gz v2ray-plugin_linux_amd64-c
 $sum bin/v2ray-plugin-linux-amd64-$VERSION-c.tar.gz
