@@ -65,6 +65,7 @@ var (
 	insecure     = flag.Bool("insecure", false, "Allow insecure certificate from server, commonly self signed.")
 	pinnedsha256 = flag.String("pinnedSha256", "", "Pinned Certificate chain sha256 fingerprint. Seprate with #.")
 	useragent    = flag.String("userAgent", "", "User agent(base64) to include in http request.")
+	bufsize      = flag.Int("bufSize", 0, "Set snd/recv socket buffer size")
 )
 
 func homeDir() string {
@@ -204,14 +205,24 @@ func generateConfig() (*core.Config, error) {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		const bufsize = 73728
+		if !(*bufsize > 0) {
+		// set a higher value than default
+			*bufsize = 196608
+		}
+		// 64k is typically default. so just set the result to 0 to use system default 
+		if *bufsize == 65536 {
+			*bufsize = 0
+		}
+	}
+
+	if *bufsize > 0 {
 		if socketConfig != nil {
-			socketConfig.TxBufSize = bufsize
-			socketConfig.RxBufSize = bufsize
+			socketConfig.TxBufSize = int64(*bufsize)
+			socketConfig.RxBufSize = int64(*bufsize)
 		} else {
 			socketConfig = &internet.SocketConfig{
-				TxBufSize: bufsize,
-				RxBufSize: bufsize,
+				TxBufSize: int64(*bufsize),
+				RxBufSize: int64(*bufsize),
 			}
 		}
 	}
@@ -433,6 +444,14 @@ func startV2Ray() (core.Server, error) {
 		if c, b := opts.Get("useragent"); b {
 			if !*server {
 				*useragent = c
+			}
+		}
+
+		if c, b := opts.Get("bufSize"); b {
+			if i, err := strconv.Atoi(c); err == nil {
+				*bufsize = i
+			} else {
+				logWarn("failed to parse buffer size !")
 			}
 		}
 
