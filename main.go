@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -39,7 +40,8 @@ import (
 )
 
 var (
-	VERSION = "custom"
+	VERSION  = "custom"
+	socksize = 0
 )
 
 var (
@@ -66,6 +68,7 @@ var (
 	pinnedsha256 = flag.String("pinnedSha256", "", "Pinned Certificate chain sha256 fingerprint. Seprate with #.")
 	useragent    = flag.String("userAgent", "", "User agent(base64) to include in http request.")
 	bufsize      = flag.Int("bufSize", 0, "Set snd/recv socket buffer size")
+	setPrior     = flag.Bool("setPrior", false, "Set priority. when set, normal/client low/server")
 )
 
 func homeDir() string {
@@ -204,14 +207,19 @@ func generateConfig() (*core.Config, error) {
 			socketConfig.Mark = uint32(*fwmark)
 		}
 	}
-	if runtime.GOOS == "windows" {
-		if !(*bufsize > 0) {
+	optsize := 524288
+	if !(*bufsize > 0) && (socksize > 0) && (socksize < optsize) {
 		// set a higher value than default
-			*bufsize = 196608
-		}
-		// 64k is typically default. so just set the result to 0 to use system default 
+		*bufsize = optsize
+		println("Set rx/tx buffer size to: " + strconv.Itoa(*bufsize))
+	} else {
+		println("BufSize already large enough :)")
+	}
+	// 64k is typically default. so just set the result to 0 to use system default
+	if strings.EqualFold(runtime.GOOS, "windows") {
 		if *bufsize == 65536 {
 			*bufsize = 0
+			println("rx/tx buffer size ignored because it's the system default: " + strconv.Itoa(*bufsize))
 		}
 	}
 
@@ -455,8 +463,28 @@ func startV2Ray() (core.Server, error) {
 			}
 		}
 
+		if _, b := opts.Get("setPrior"); b {
+			*setPrior = true
+		}
+
 		if *vpn {
 			registerControlFunc()
+		}
+	}
+
+	var prio bool
+	switch *server {
+	case true:
+		prio = *setPrior
+	case false:
+		prio = !*setPrior
+	default:
+		prio = true
+	}
+
+	if prio {
+		if SetPrior() != nil {
+			println("Failed to set priority or not supported !")
 		}
 	}
 
@@ -484,6 +512,37 @@ func printVersion() {
 	fmt.Println("Yet another SIP003 plugin for shadowsocks")
 }
 
+func GetCurSockSize(v *int) bool {
+	D := net.Dialer{Timeout: time.Second * 3}
+	conn, err := D.Dial("tcp", "stun.freeswitch.org:3478")
+	if err != nil {
+		println("Failed to connect to test target ! > " + err.Error())
+		return false
+	}
+	defer conn.Close()
+	tcpConn := conn.(*net.TCPConn)
+	recvBufSize, err := FGetSockSizeSys(tcpConn)
+	if err != nil {
+		println("Socket function failed ! > " + err.Error())
+		return false
+	}
+	*v = recvBufSize
+	return true
+}
+
+func FGetSockSizeSys(conn *net.TCPConn) (int, error) {
+	con, err := conn.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	res := 0
+	wrp := func(fd uintptr) {
+		FGInvoke(&res, fd)
+	}
+	err = con.Control(wrp)
+	return res, err
+}
+
 func main() {
 	flag.Parse()
 
@@ -495,6 +554,12 @@ func main() {
 	logInit()
 
 	printCoreVersion()
+
+	if GetCurSockSize(&socksize) {
+		println("Detected current receive buffer size:" + strconv.Itoa(socksize))
+	} else {
+		println("Failed to detect receive buffer size or not supported!")
+	}
 
 	server, err := startV2Ray()
 	if err != nil {
@@ -516,7 +581,7 @@ func main() {
 
 	{
 		osSignals := make(chan os.Signal, 1)
-		signal.Notify(osSignals, os.Interrupt, os.Kill, syscall.SIGTERM)
+		signal.Notify(osSignals, os.Interrupt, syscall.SIGTERM)
 		<-osSignals
 	}
 }
