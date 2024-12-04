@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	gonet "net"
 	"os"
 	"os/signal"
 	"os/user"
@@ -13,7 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	_ "github.com/v2fly/v2ray-core/v5/app/proxyman/inbound"
@@ -42,6 +44,7 @@ import (
 var (
 	VERSION  = "custom"
 	socksize = 0
+	D        = gonet.Dialer{Timeout: time.Second * 2}
 )
 
 var (
@@ -69,6 +72,8 @@ var (
 	useragent    = flag.String("userAgent", "", "User agent(base64) to include in http request.")
 	bufsize      = flag.Int("bufSize", 0, "Set snd/recv socket buffer size")
 	setPrior     = flag.Bool("setPrior", false, "Set priority. when set, normal/client low/server")
+	v6First      = flag.Bool("v6First", false, "Resolve domain to ipv6 if possible")
+	v6Force      = flag.Bool("v6Force", false, "Force resolve v6 even if no ipv6 conn")
 )
 
 func homeDir() string {
@@ -193,7 +198,7 @@ func generateConfig() (*core.Config, error) {
 		ProtocolName: *mode,
 		TransportSettings: []*internet.TransportConfig{{
 			ProtocolName: *mode,
-			Settings:     serial.ToTypedMessage(transportSettings),
+			Settings:     serial.ToTypedMessage(protoadapt.MessageV1Of(transportSettings)),
 		}},
 	}
 
@@ -470,6 +475,14 @@ func startV2Ray() (core.Server, error) {
 		if *vpn {
 			registerControlFunc()
 		}
+
+		if _, b := opts.Get("v6First"); b {
+			*v6First = true
+		}
+
+		if _, b := opts.Get("v6Force"); b {
+			*v6Force = true
+		}
 	}
 
 	var prio bool
@@ -485,6 +498,21 @@ func startV2Ray() (core.Server, error) {
 	if prio {
 		if SetPrior() != nil {
 			println("Failed to set priority or not supported !")
+		}
+	}
+
+	if !*server {
+		if GetCurSockSize(&socksize) {
+			println("Detected current receive buffer size:" + strconv.Itoa(socksize))
+		} else {
+			println("Failed to detect receive buffer size or not supported!")
+		}
+
+		if *v6First {
+			addr := resolveV6(remoteAddr)
+			if addr != nil && checkIPV6() {
+				*remoteAddr = *addr
+			}
 		}
 	}
 
@@ -513,15 +541,14 @@ func printVersion() {
 }
 
 func GetCurSockSize(v *int) bool {
-	D := net.Dialer{Timeout: time.Second * 3}
-	conn, err := D.Dial("tcp", "stun.freeswitch.org:3478")
+	conn, err := D.Dial("tcp", "dns.alidns.com:80")
 	if err != nil {
 		println("Failed to connect to test target ! > " + err.Error())
 		return false
 	}
-	defer conn.Close()
 	tcpConn := conn.(*net.TCPConn)
 	recvBufSize, err := FGetSockSizeSys(tcpConn)
+	defer conn.Close()
 	if err != nil {
 		println("Socket function failed ! > " + err.Error())
 		return false
@@ -530,7 +557,7 @@ func GetCurSockSize(v *int) bool {
 	return true
 }
 
-func FGetSockSizeSys(conn *net.TCPConn) (int, error) {
+func FGetSockSizeSys(conn *gonet.TCPConn) (int, error) {
 	con, err := conn.SyscallConn()
 	if err != nil {
 		return 0, err
@@ -541,6 +568,36 @@ func FGetSockSizeSys(conn *net.TCPConn) (int, error) {
 	}
 	err = con.Control(wrp)
 	return res, err
+}
+
+func checkIPV6() bool {
+	if *v6Force {
+		println("V6Force enabled ! Skipping v6 conn test !")
+		return true
+	}
+	conn, err := D.Dial("tcp6", "[2400:3200:baba::1]:80")
+	if err != nil {
+		println("No ipv6 conn available !")
+		return false
+	}
+	defer conn.Close()
+	return true
+}
+
+func resolveV6(s *string) *string {
+	ips, err := gonet.LookupIP(*s)
+	if err != nil {
+		println("some error occured ! skipped v6 solve !")
+		return nil
+	}
+	for _, ip := range ips {
+		if ip.To4() == nil {
+			ret := ip.String()
+			return &ret
+		}
+	}
+	println("No v6 ip found !")
+	return nil
 }
 
 func main() {
@@ -554,12 +611,6 @@ func main() {
 	logInit()
 
 	printCoreVersion()
-
-	if GetCurSockSize(&socksize) {
-		println("Detected current receive buffer size:" + strconv.Itoa(socksize))
-	} else {
-		println("Failed to detect receive buffer size or not supported!")
-	}
 
 	server, err := startV2Ray()
 	if err != nil {

@@ -26,10 +26,10 @@ ARCHS=(amd64 386)
 
 apt install upx-ucl
 
-wget https://go.dev/dl/go1.22.8.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.23.4.linux-amd64.tar.gz
 
-tar -zxf go1.22.8.linux-amd64.tar.gz
-rm go1.22.8.linux-amd64.tar.gz
+tar -zxf go1.23.4.linux-amd64.tar.gz
+rm go1.23.4.linux-amd64.tar.gz
 
 export PATH=$PWD/go/bin:$PATH
 
@@ -41,6 +41,7 @@ tar --bz -xf x86_64-w64_legacy-mingw32-cross.tb2
 rm *.tb2
 
 export PATH=$PWD/x86_64-linux-gnu/bin:$PWD/x86_64-w64_legacy-mingw32/bin:$PATH
+hash -r
 
 
 export GOPROXY=direct
